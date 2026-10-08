@@ -23,6 +23,11 @@ cat >"$fixture/bin/curl" <<'MOCK'
 #!/usr/bin/env bash
 echo "curl $*" >>"$DEPLOY_TEST_LOG"
 MOCK
+cat >"$fixture/bin/systemctl" <<'MOCK'
+#!/usr/bin/env bash
+# Force the optional reboot setup path without touching real services.
+exit 1
+MOCK
 chmod +x "$fixture/bin/"*
 export PATH="$fixture/bin:$PATH"
 
@@ -39,6 +44,10 @@ fi
 cat >"$fixture/app/.env" <<'ENV'
 DATABASE_URL="mysql://fixture:fixture@127.0.0.1:3306/test"
 RBX_API_SECRET="only-test-fixture-not-a-real-secret-00000000"
+WEB_ORIGIN="https://example.com"
+WEB_ADMIN_USERNAME="admin"
+WEB_ADMIN_PASSWORD_HASH="scrypt:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+WEB_SESSION_SECRET="only-test-web-session-secret-0000000000000000"
 ENV
 if FAIL_BUILD=1 bash "$fixture/app/deploy.sh" >"$fixture/output" 2>&1; then
   echo 'failed build must stop deployment' >&2; exit 1
@@ -52,6 +61,9 @@ grep -qx 'npm test -- tests/unit' "$DEPLOY_TEST_LOG"
 ! grep -q 'prisma:push\|aidev-gateway\|npm test$' "$DEPLOY_TEST_LOG"
 grep -q 'http://127.0.0.1:3876/api/health' "$DEPLOY_TEST_LOG"
 grep -qx 'pm2 save' "$DEPLOY_TEST_LOG"
+if [[ "$(id -u)" == 0 && -d /run/systemd/system ]]; then
+  grep -q '^pm2 startup systemd -u root --hp ' "$DEPLOY_TEST_LOG"
+fi
 ! grep -q 'only-test-fixture-not-a-real-secret' "$fixture/output"
 
 : >"$DEPLOY_TEST_LOG"

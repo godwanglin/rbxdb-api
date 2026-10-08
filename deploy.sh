@@ -3,8 +3,8 @@ set -Eeuo pipefail
 umask 077
 
 # Run from an existing checkout. Never reads secrets into command arguments.
+# Single-server deploy; use release directories when zero-downtime rollback is needed.
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
-APP_DIR="$(pwd -P)"
 APP_NAME=rbxdb-api
 PORT=3876
 
@@ -26,14 +26,20 @@ chmod 600 .env
 
 # Validate without sourcing .env as executable shell code or printing values.
 node --env-file=.env - <<'NODE'
-const fail = () => { console.error('deploy: invalid DATABASE_URL or RBX_API_SECRET; check private .env'); process.exit(1); };
+const fail = (message) => { console.error(`deploy: ${message}; check private .env`); process.exit(1); };
 try {
   const url = new URL(process.env.DATABASE_URL);
   const secret = process.env.RBX_API_SECRET ?? '';
   if (url.protocol !== 'mysql:' || !url.hostname || !url.username || !url.password
       || url.pathname.length < 2 || url.username === 'username' || url.password === 'password'
-      || secret.length < 32 || secret.includes('replace-with')) fail();
-} catch { fail(); }
+      || secret.length < 32 || secret.includes('replace-with')) fail('invalid DATABASE_URL or RBX_API_SECRET');
+  const origin = new URL(process.env.WEB_ORIGIN ?? '');
+  const hash = process.env.WEB_ADMIN_PASSWORD_HASH ?? '';
+  const session = process.env.WEB_SESSION_SECRET ?? '';
+  if (origin.protocol !== 'https:' || origin.origin !== process.env.WEB_ORIGIN
+      || !process.env.WEB_ADMIN_USERNAME || !/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(hash)
+      || session.length < 32 || session.includes('replace-with')) fail('invalid web admin configuration');
+} catch { fail('invalid environment configuration'); }
 NODE
 
 export NEXT_TELEMETRY_DISABLED=1
@@ -62,4 +68,11 @@ for _ in {1..30}; do
 done
 [[ "$healthy" == 1 ]] || die "health check failed; inspect pm2 logs $APP_NAME locally"
 pm2 save >/dev/null
+if [[ "$(id -u)" == 0 ]] && command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
+  if ! systemctl is-enabled "pm2-$(id -un).service" >/dev/null 2>&1; then
+    pm2 startup systemd -u "$(id -un)" --hp "$HOME" >/dev/null
+  fi
+else
+  printf 'deploy: configure PM2 startup once with an administrator for reboot recovery\n'
+fi
 printf 'deploy: %s healthy at http://127.0.0.1:%s; configure HTTPS reverse proxy separately\n' "$APP_NAME" "$PORT"

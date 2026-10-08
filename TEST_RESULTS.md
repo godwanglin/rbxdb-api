@@ -7,13 +7,13 @@
 - Roblox server receipt audit bridge, durable retry outbox, and purchase-backed Admin Gift & Resync.
 - One history row per PurchaseId. Canceled prompts do not create history.
 - Production target configured: https://rtdb-rbxsim01.weebinhub.biz.id.
-- No web UI, external gifting command, or external Roblox DataStore write endpoint.
+- Protected Next.js/Tailwind web dashboard; no external gifting command or Roblox DataStore write endpoint.
 
 ## Performed checks
 
 | Check | Result | Scope |
 | --- | --- | --- |
-| API test suite | 57/57 passed, 7 files | Unit, integration against MySQL, route contracts |
+| API + web test suite | 69/69 passed, 10 files | Unit, integration against MySQL, route contracts |
 | TypeScript | Passed | `npm run typecheck` |
 | Next.js production build | Passed | `npm run build` |
 | Prisma | Passed | Validate, generate, and requested `db push` to the supplied database |

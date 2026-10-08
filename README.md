@@ -8,6 +8,7 @@ Next.js App Router API, TypeScript, Prisma/MySQL, Roblox receipt audit bridge, a
 - GET /api/v1/purchases: signed history query.
 - GET /api/v1/purchases/:purchaseId: signed detail.
 - GET /api/health: database availability, no credential output.
+- Protected matte-dark web dashboard at `/` for purchase history review.
 - No web UI or API command for compensation.
 - Admin Gift & Resync retries the existing receipt-backed Shop.received/claim path. It cannot grant twice or use generic gifts for unmapped products.
 
@@ -34,7 +35,7 @@ The local .env already contains the supplied database configuration and generate
 
 Production target: https://rtdb-rbxsim01.weebinhub.biz.id. Production listener: `127.0.0.1:3876`.
 
-The target was not active during implementation; local build and real MySQL were tested. Deployment, TLS, and a real paid production receipt remain separate validation steps.
+DNS/TLS and API health on the production domain were verified. A real paid production receipt remains a separate validation step.
 
 ### VPS deployment
 
@@ -42,7 +43,9 @@ Clone `https://github.com/godwanglin/rbxdb-api.git` into its own application dir
 
 The script installs locked dependencies, validates Prisma, builds, typechecks, runs unit tests, and starts/restarts only PM2 `rbxdb-api` through `ecosystem.config.cjs` on `127.0.0.1:3876`. `aidev-gateway` is never touched. For initial database setup only, use `DB_PUSH=1 bash deploy.sh`; destructive schema changes are not automatically accepted. Integration/contract tests must be run separately against a test database, not during production deployment.
 
-Update the checkout with `git pull --ff-only` before subsequent deployments. Configure HTTPS reverse proxy for the production hostname to `http://127.0.0.1:3876`. `pm2 save` persists the application list after a healthy start; configure `pm2 startup` separately for server reboot recovery. Build failure stops deployment before the PM2 restart; in-place deployments do not provide zero-downtime rollback.
+Update the checkout with `git pull --ff-only` before subsequent deployments. Configure HTTPS reverse proxy for the production hostname to `http://127.0.0.1:3876`, preserving Host and X-Forwarded-Proto. `pm2 save` persists the application list after a healthy start; root deployments on systemd also install PM2 reboot recovery when absent. Non-root deployments require administrator setup once. Build failure stops deployment before the PM2 restart; in-place deployments do not provide zero-downtime rollback.
+
+The base URL `/` serves the protected matte-dark admin dashboard. The web dashboard uses a separate HttpOnly session and never exposes the Roblox HMAC secret. Purchases routes require a valid HMAC signature and return 401 without it. Configure the first admin with `npm run web:configure`; the generated password is stored in the private `.env.web-admin` file.
 
 Deployment guards have an isolated Linux check: `bash tests/deploy.spec.sh`. It uses command fixtures and never changes real PM2 services or writes to a database.
 

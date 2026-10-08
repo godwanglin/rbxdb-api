@@ -4,9 +4,9 @@ import { fail } from './response';
 
 export const MAX_BODY_BYTES = 128 * 1024;
 
-export async function readBody(request: Request): Promise<string> {
+export async function readBody(request: Request, maxBytes = MAX_BODY_BYTES): Promise<string> {
   const length = request.headers.get('content-length');
-  if (length && (!/^\d+$/.test(length) || Number(length) > MAX_BODY_BYTES)) {
+  if (length && (!/^\d+$/.test(length) || Number(length) > maxBytes)) {
     throw new ApiError(413, 'BODY_TOO_LARGE', 'Payload terlalu besar');
   }
   const reader = request.body?.getReader();
@@ -20,7 +20,7 @@ export async function readBody(request: Request): Promise<string> {
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > MAX_BODY_BYTES) {
+      if (total > maxBytes) {
         await reader.cancel();
         throw new ApiError(413, 'BODY_TOO_LARGE', 'Payload terlalu besar');
       }

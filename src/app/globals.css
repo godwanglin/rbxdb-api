@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --matte-bg: #0b0d10;
+  --matte-panel: #12161b;
+  --matte-panel-strong: #171c22;
+  --matte-line: #252c35;
+  --matte-text: #f1f3f5;
+  --matte-muted: #8d98a6;
+  --matte-red: #ef4444;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: var(--matte-bg);
+  color: var(--matte-text);
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+}
+
+button, input, select { font: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid #f87171;
+  outline-offset: 2px;
+}
+
+::selection { background: #7f1d1d; color: white; }
+
+@layer components {
+  .field { @apply h-10 rounded-lg border border-white/10 bg-[#11151a] px-3 text-sm font-normal text-[#d5d9df] placeholder:text-[#59626e]; }
+  .button { @apply inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-white/10 bg-[#191d23] px-3 text-xs font-medium text-[#d4d8df] transition-colors hover:bg-[#242a32] disabled:cursor-not-allowed disabled:opacity-40; }
+}
+dialog::backdrop { background: rgb(0 0 0 / .7); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }

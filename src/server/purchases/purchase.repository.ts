@@ -68,12 +68,12 @@ export function findPurchase(purchaseId: string) {
   return prisma.purchase.findUnique({ where: { purchaseId } });
 }
 
-type PurchaseQuery = {
+export type PurchaseQuery = {
   from?: Date; to?: Date; search?: string; user?: string; category?: string;
   grantStatus?: string; item?: string; page: number; pageSize: number;
 };
 
-export async function listPurchases(query: PurchaseQuery) {
+export function purchaseWhere(query: PurchaseQuery): Prisma.PurchaseWhereInput {
   const clauses: Prisma.PurchaseWhereInput[] = [];
   if (query.from || query.to) clauses.push({ createdAt: { ...(query.from && { gte: query.from }), ...(query.to && { lte: query.to }) } });
   if (query.user) clauses.push({ OR: [
@@ -91,10 +91,37 @@ export async function listPurchases(query: PurchaseQuery) {
   if (query.category) clauses.push({ category: query.category });
   if (query.grantStatus) clauses.push({ grantStatus: query.grantStatus as Prisma.EnumGrantStatusFilter['equals'] });
   if (query.item) clauses.push({ OR: [{ itemId: { contains: query.item } }, { itemName: { contains: query.item } }] });
-  const where = { AND: clauses };
+  return { AND: clauses };
+}
+
+export async function listPurchases(query: PurchaseQuery) {
+  const where = purchaseWhere(query);
   const [data, total] = await prisma.$transaction([
     prisma.purchase.findMany({ where, select: summarySelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
     prisma.purchase.count({ where }),
   ]);
   return { data, total };
+}
+
+export async function dashboardPurchases(query: PurchaseQuery) {
+  const where = purchaseWhere(query);
+  const categoryWhere = purchaseWhere({ from: query.from, to: query.to, page: 1, pageSize: 15 });
+  const groupArgs = {
+    by: ['grantStatus'], orderBy: { grantStatus: 'asc' }, where,
+    _count: { _all: true }, _sum: { robux: true },
+  } satisfies Prisma.PurchaseGroupByArgs;
+  const grouped = prisma.purchase.groupBy(groupArgs);
+  const [items, totals, categoryRows] = await prisma.$transaction([
+    prisma.purchase.findMany({ where, select: summarySelect, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+    grouped,
+    prisma.purchase.groupBy({ by: ['category'], where: categoryWhere, orderBy: { category: 'asc' }, take: 100 }),
+  ]);
+  const summary = { total: 0, robux: 0, applied: 0, pending: 0, failed: 0, unknown: 0 };
+  const keys = { APPLIED: 'applied', PENDING: 'pending', FAILED: 'failed', UNKNOWN_PRODUCT: 'unknown' } as const;
+  for (const row of totals) {
+    summary.total += row._count._all;
+    summary.robux += row._sum.robux ?? 0;
+    summary[keys[row.grantStatus]] = row._count._all;
+  }
+  return { items, total: summary.total, page: query.page, pageSize: query.pageSize, summary, categories: categoryRows.map(row => row.category) };
 }

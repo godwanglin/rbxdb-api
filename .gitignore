@@ -1,6 +1,7 @@
 node_modules/
 .next/
 .env
+.env.web-admin
 .env.*
 !.env.example
 coverage/
