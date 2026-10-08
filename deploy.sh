@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+# Run from an existing checkout. Never reads secrets into command arguments.
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+APP_DIR="$(pwd -P)"
+APP_NAME=rbxdb-api
+PORT=3876
+
+die() { printf 'deploy: %s\n' "$*" >&2; exit 1; }
+for command in node npm pm2 curl flock; do
+  command -v "$command" >/dev/null || die "$command is required"
+done
+exec 9>.deploy.lock
+flock -n 9 || die 'another deployment is running'
+
+node -e 'const [major,minor]=process.versions.node.split(".").map(Number); if(major<22||(major===22&&minor<12)) process.exit(1)' \
+  || die 'Node.js 22.12+ is required'
+if [[ ! -f .env ]]; then
+  cp -- .env.example .env
+  die 'created private .env from template; configure database and matching Roblox HMAC secret, then rerun'
+fi
+[[ ! -L .env ]] || die '.env must not be a symlink'
+chmod 600 .env
+
+# Validate without sourcing .env as executable shell code or printing values.
+node --env-file=.env - <<'NODE'
+const fail = () => { console.error('deploy: invalid DATABASE_URL or RBX_API_SECRET; check private .env'); process.exit(1); };
+try {
+  const url = new URL(process.env.DATABASE_URL);
+  const secret = process.env.RBX_API_SECRET ?? '';
+  if (url.protocol !== 'mysql:' || !url.hostname || !url.username || !url.password
+      || url.pathname.length < 2 || url.username === 'username' || url.password === 'password'
+      || secret.length < 32 || secret.includes('replace-with')) fail();
+} catch { fail(); }
+NODE
+
+export NEXT_TELEMETRY_DISABLED=1
+npm ci --include=dev
+npm run prisma:generate
+npm run prisma:validate
+# First deploy only: DB_PUSH=1 bash deploy.sh. Never uses --accept-data-loss.
+if [[ "${DB_PUSH:-0}" == 1 ]]; then
+  npm run prisma:push
+fi
+npm run build
+npm run typecheck
+# Full integration/contract suite writes fixtures: run separately on a test DB.
+npm test -- tests/unit
+
+# Pin this one app's executable and args; do not touch aidev-gateway or other apps.
+pm2 startOrRestart ecosystem.config.cjs --only "$APP_NAME" --update-env
+
+healthy=0
+for _ in {1..30}; do
+  if curl --fail --silent --max-time 5 "http://127.0.0.1:$PORT/api/health" >/dev/null; then
+    healthy=1
+    break
+  fi
+  sleep 1
+done
+[[ "$healthy" == 1 ]] || die "health check failed; inspect pm2 logs $APP_NAME locally"
+pm2 save >/dev/null
+printf 'deploy: %s healthy at http://127.0.0.1:%s; configure HTTPS reverse proxy separately\n' "$APP_NAME" "$PORT"

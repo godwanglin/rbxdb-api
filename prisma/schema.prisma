@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentStatus {
+  VERIFIED
+}
+
+enum GrantStatus {
+  APPLIED
+  PENDING
+  FAILED
+  UNKNOWN_PRODUCT
+}
+
+model Purchase {
+  id                BigInt        @id @default(autoincrement())
+  purchaseId        String        @unique @db.VarChar(128)
+  userId            BigInt
+  username          String        @db.VarChar(100)
+  displayName       String        @db.VarChar(100)
+  productId         BigInt
+  itemId            String        @db.VarChar(128)
+  itemName          String        @db.VarChar(200)
+  category          String        @db.VarChar(100)
+  robux             Int
+  storeId           String?       @db.VarChar(128)
+  storeName         String?       @db.VarChar(200)
+  ownerUserId       BigInt?
+  beneficiaryUserId BigInt?
+  paymentStatus     PaymentStatus
+  grantStatus       GrantStatus
+  failureCode       String?       @db.VarChar(100)
+  failureMessage    String?       @db.VarChar(500)
+  grantAttempts     Int           @default(0)
+  receiptCreatedAt  DateTime
+  processedAt       DateTime?
+  completedAt       DateTime?
+  lastSyncedAt      DateTime?
+  universeId        BigInt?
+  placeId           BigInt?
+  jobId             String?       @db.VarChar(128)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([grantStatus])
+  @@index([category])
+  @@index([itemId])
+  @@index([createdAt, grantStatus])
+}
+
+model PurchaseNonce {
+  nonce     String   @id @db.VarChar(128)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model ApiRateBucket {
+  key       String   @id @db.VarChar(128)
+  count     Int      @default(0)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}

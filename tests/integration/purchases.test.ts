@@ -1,0 +1,19 @@
+import { afterAll, describe, expect, it } from 'vitest';
+import { prisma } from '../../src/lib/prisma';
+import { purchaseSchema } from '../../src/server/purchases/purchase.schema';
+import { upsertPurchase, listPurchases } from '../../src/server/purchases/purchase.repository';
+const prefix='test_'+crypto.randomUUID();
+const base={purchaseId:prefix,userId:'987654321',username:'test_user',displayName:'Test User',productId:'98765',itemId:'test_item',itemName:'Test Item',category:prefix,robux:10,paymentStatus:'VERIFIED',grantStatus:'PENDING',grantAttempts:1,receiptCreatedAt:new Date().toISOString()};
+describe('purchase MySQL integration',()=>{
+ afterAll(async()=>{await prisma.purchase.deleteMany({where:{category:prefix}});await prisma.$disconnect();});
+ it('upserts duplicate PurchaseId into one row',async()=>{const data=purchaseSchema.parse(base);await upsertPurchase(data);await upsertPurchase(data);expect(await prisma.purchase.count({where:{purchaseId:prefix}})).toBe(1);});
+ it('updates same row to applied and prevents downgrade',async()=>{await upsertPurchase(purchaseSchema.parse({...base,grantStatus:'APPLIED',grantAttempts:2}));const row=await upsertPurchase(purchaseSchema.parse({...base,grantStatus:'PENDING',grantAttempts:3}));expect(row.grantStatus).toBe('APPLIED');});
+ it('rejects receipt identity tampering',async()=>{await expect(upsertPurchase(purchaseSchema.parse({...base,userId:'12345'}))).rejects.toThrow('RECEIPT_IDENTITY_CONFLICT');});
+ it('handles concurrent duplicates without double rows',async()=>{const data=purchaseSchema.parse({...base,purchaseId:prefix+'_concurrent'});await Promise.all([upsertPurchase(data),upsertPurchase(data)]);expect(await prisma.purchase.count({where:{purchaseId:data.purchaseId}})).toBe(1);});
+ it('filters and paginates safely',async()=>{const result=await listPurchases({category:prefix,search:'test_',page:1,pageSize:1});expect(result.data).toHaveLength(1);expect(result.total).toBe(2);});
+ it('stores FAILED and UNKNOWN_PRODUCT states',async()=>{for(const grantStatus of ['FAILED','UNKNOWN_PRODUCT']){const row=await upsertPurchase(purchaseSchema.parse({...base,purchaseId:prefix+'_'+grantStatus,grantStatus}));expect(row.grantStatus).toBe(grantStatus);}});
+ it('treats SQL injection search as literal',async()=>{const result=await listPurchases({category:prefix,search:"' OR 1=1 --",page:1,pageSize:15});expect(result.total).toBe(0);});
+ it('ends APPLIED when applied and pending arrive concurrently',async()=>{const id=prefix+'_race';await Promise.all([upsertPurchase(purchaseSchema.parse({...base,purchaseId:id,grantStatus:'APPLIED',grantAttempts:2})),upsertPurchase(purchaseSchema.parse({...base,purchaseId:id,grantStatus:'PENDING',grantAttempts:3}))]);expect((await prisma.purchase.findUnique({where:{purchaseId:id}}))?.grantStatus).toBe('APPLIED');});
+ it('accepts APPLIED even when attempt counter is lower',async()=>{const id=prefix+'_lower';await upsertPurchase(purchaseSchema.parse({...base,purchaseId:id,grantAttempts:5}));const row=await upsertPurchase(purchaseSchema.parse({...base,purchaseId:id,grantStatus:'APPLIED',grantAttempts:2}));expect(row.grantStatus).toBe('APPLIED');});
+ it('enriches applied metadata without losing attempts or target',async()=>{const id=prefix+'_enrich';await upsertPurchase(purchaseSchema.parse({...base,purchaseId:id,grantStatus:'APPLIED',grantAttempts:0}));const enriched=await upsertPurchase(purchaseSchema.parse({...base,purchaseId:id,grantStatus:'APPLIED',grantAttempts:4,storeId:'confirmed-store'}));expect(enriched.grantAttempts).toBe(4);expect(enriched.storeId).toBe('confirmed-store');const stale=await upsertPurchase(purchaseSchema.parse({...base,purchaseId:id,grantStatus:'APPLIED',grantAttempts:1,storeId:'stale-store'}));expect(stale.grantAttempts).toBe(4);expect(stale.storeId).toBe('confirmed-store');});
+});

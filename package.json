@@ -1,0 +1,35 @@
+{
+  "name": "apirbxdb",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:validate": "prisma validate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.2",
+    "next": "^16.4.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "prisma": "^6.16.2",
+    "typescript": "^5.9.2",
+    "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
