@@ -51,9 +51,11 @@ Synthetic purchase rows and signature nonce fixtures were removed by exact uniqu
 
 ## Remaining deployment validation
 
-The production domain was not active during this work. The following are **not yet verified**:
+Production web deployment verified on 2026-10-08: `/` and `/api/health` return 200, unauthenticated admin history returns 401, admin login and authenticated history return 200 with Secure/HttpOnly cookies. PM2 reboot startup is enabled. `aidev-gateway` PID remained 1303914 (no restart). Deployment fixture checks passed. Browser login worked locally; full desktop/mobile visual regression remains unverified because browser tooling was intermittent.
 
-1. Production hosting, DNS/TLS, reverse proxy request limits, and endpoint reachability from a published Roblox server.
+The following are **not yet verified**:
+
+1. Reverse proxy request limits and endpoint reachability from a published Roblox server.
 2. A real paid production Robux receipt and its subsequent appearance in Purchases.
 3. Full Play-mode Admin flow and mobile viewport regression.
 
