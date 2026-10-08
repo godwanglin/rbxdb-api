@@ -17,11 +17,11 @@ flock -n 9 || die 'another deployment is running'
 
 node -e 'const [major,minor]=process.versions.node.split(".").map(Number); if(major<22||(major===22&&minor<12)) process.exit(1)' \
   || die 'Node.js 22.12+ is required'
+[[ ! -L .env ]] || die '.env must not be a symlink'
 if [[ ! -f .env ]]; then
   cp -- .env.example .env
   die 'created private .env from template; configure database and matching Roblox HMAC secret, then rerun'
 fi
-[[ ! -L .env ]] || die '.env must not be a symlink'
 chmod 600 .env
 
 # Validate without sourcing .env as executable shell code or printing values.

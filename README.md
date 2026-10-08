@@ -44,6 +44,8 @@ The script installs locked dependencies, validates Prisma, builds, typechecks, r
 
 Update the checkout with `git pull --ff-only` before subsequent deployments. Configure HTTPS reverse proxy for the production hostname to `http://127.0.0.1:3876`. `pm2 save` persists the application list after a healthy start; configure `pm2 startup` separately for server reboot recovery. Build failure stops deployment before the PM2 restart; in-place deployments do not provide zero-downtime rollback.
 
+Deployment guards have an isolated Linux check: `bash tests/deploy.spec.sh`. It uses command fixtures and never changes real PM2 services or writes to a database.
+
 Roblox server configuration:
 
 - ServerScriptService.MarketServer.Shop.PurchaseHistoryConfig owns BaseUrl, KeyId, Timeout (8 seconds).
